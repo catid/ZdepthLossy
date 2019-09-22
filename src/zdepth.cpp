@@ -404,7 +404,8 @@ void DepthCompressor::Compress(
         Low,
         LowOut);
 
-    // Interleave Zstd compression with video encoder work
+    // Interleave Zstd compression with video encoder work.
+    // Only saves about 400 microseconds from a 5000 microsecond encode.
     ZstdCompress(High, HighOut);
     header.HighUncompressedBytes = static_cast<uint32_t>( High.size() );
     header.HighCompressedBytes = static_cast<uint32_t>( HighOut.size() );

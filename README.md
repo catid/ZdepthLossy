@@ -89,25 +89,58 @@ You must use different objects for the compressor and decompressor, or it will f
 
 ## Lossy versus Lossless
 
-    The lossless encoder is in a separate repo here:
-    https://github.com/catid/Zdepth
-    The two are split because the lossy version is harder to use.
+The lossless encoder is in a separate repo here:
+https://github.com/catid/Zdepth
+The two are split because this lossy version is harder to use.
 
-    You may want to compare the quality and size of the output with a
-    lossless compressor as well before deciding to use the lossy version.
+You may want to compare the quality and size of the output with a
+lossless compressor as well before deciding to use the lossy version.
 
-    The results vary with the scene.  For the unit test set, the lossless
-    encoder gets 4-5 Mbps.  The lossy encoder gets 2.5 Mbps with okay quality.
-    For the 320x288 depth mode of the Azure Kinect DK I would not recommend
-    setting the bitrate lower than 2 Mbps because quality goes off a cliff.
-    If this difference is not significant (e.g. streaming just one camera)
-    then the lossless version may be a decent option.
+The results vary with the scene.  For the unit test set, the lossless
+encoder gets 4-5 Mbps.  The lossy encoder gets 2.5 Mbps with okay quality.
+For the 320x288 depth mode of the Azure Kinect DK I would not recommend
+setting the bitrate lower than 2 Mbps because quality goes off a cliff.
+If this difference is not significant (e.g. streaming just one camera)
+then the lossless version may be a decent option.
+
+
+## Compression Algorithm
+
+    High-level:
+
+        (1) Special case for zero.
+            This ensures that the H.264 encoders do not flip zeroes.
+        (1) Quantize depth to 11 bits based on sensor accuracy at range.
+            Eliminate data that we do not need to encode.
+        (2) Rescale the data so that it ranges full-scale from 0 to 2047.
+        (3) Compress high 3 bits with Zstd.
+        (4) Compress low 8 bits with H.264.
+
+    High 3-bit compression with Zstd:
+
+        (1) Combine 4-bit nibbles together into bytes.
+        (2) Encode with Zstd.
+
+    Low 8-bit compression with a video encoder:
+
+        (1) Folding to avoid sharp transitions in the low bits.
+            The low bits are submitted to the H.264 encoder, meaning that
+            wherever the 8-bit value rolls over it transitions from
+            255..0 again.  This sharp transition causes problems for the
+            encoder so to solve that we fold every other 8-bit range
+            by subtracting it from 255.  So instead the roll-over becomes
+            253, 254, 255, 254, 253, ... 1, 0, 1, 2, ...
+        (2) Compress the resulting data as an image with a video encoder.
+            We use the best hardware acceleration available on the platform
+            and attempt to run the multiple encoders in parallel.
+
+    Further details are in the DepthCompressor::Filter() code.
 
 
 ## File Format
 
-    Format Magic is used to quickly check that the file is of this format.
-    Words are stored in little-endian byte order.
+Format Magic is used to quickly check that the file is of this format.
+Words are stored in little-endian byte order.
 
     struct DepthHeader
     {
@@ -126,7 +159,7 @@ You must use different objects for the compressor and decompressor, or it will f
         // Compressed data follows: High bits, then low bits.
     };
 
-    The compressed and uncompressed sizes are of packed data for Zstd.
+The compressed and uncompressed sizes are of packed data for Zstd.
 
     Flags:
         1 = Keyframe.
@@ -136,38 +169,14 @@ For more details on algorithms and format please check out the source code.
 Feel free to modify the format for your data to improve the performance.
 
 
-## Compression Algorithm
-
-        (1) Special case for zero.
-            This ensures that the H.264 encoders do not flip zeroes.
-        (1) Quantize depth to 11 bits based on sensor accuracy at range.
-            Eliminate data that we do not need to encode.
-        (2) Rescale the data so that it ranges full-scale from 0 to 2047.
-        (3) Compress high 3 bits with Zstd.
-        (4) Compress low 8 bits with H.264.
-
-    High 3-bit compression with Zstd:
-
-        (1) Combine 4-bit nibbles together into bytes.
-        (2) Encode with Zstd.
-
-    Low 8-bit compression with H.264:
-
-        (1) Folding to avoid sharp transitions in the low bits.
-            The low bits are submitted to the H.264 encoder, meaning that
-            wherever the 8-bit value rolls over it transitions from
-            255..0 again.  This sharp transition causes problems for the
-            encoder so to solve that we fold every other 8-bit range
-            by subtracting it from 255.  So instead the roll-over becomes
-            253, 254, 255, 254, 253, ... 1, 0, 1, 2, ...
-        (2) Compress the resulting data as an image with a video encoder.
-            We use the best hardware acceleration available on the platform
-            and attempt to run the multiple encoders in parallel.
-
-    Further details are in the DepthCompressor::Filter() code.
-
-
 ## Detailed Benchmark Results
+
+The results are from an i9 9900K high end desktop and are not too rigorous.
+Using H265 for video encoding.
+
+It seems like the primary advantage of using a video encoder is that
+non-keyframes are significantly smaller than the P-frames of my lossless format.
+The keyframes are about the same size for both.
 
     -------------------------------------------------------------------
     Test vector: Ceiling
@@ -386,8 +395,8 @@ and using a single encoder for the low bits since in practice
 having more than one encoder is problematic when recording from
 multiple cameras: NVENC only supports two parallel encoders.
 
-Uses libdivide: https://github.com/ridiculousfish/libdivide
-Uses Zstd: https://github.com/facebook/zstd
+* Uses libdivide: https://github.com/ridiculousfish/libdivide
+* Uses Zstd: https://github.com/facebook/zstd
 
 Software by Christopher A. Taylor mrcatid@gmail.com
 

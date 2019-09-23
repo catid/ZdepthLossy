@@ -11,9 +11,7 @@ possible to reduce CPU usage during encoding and decoding.
 
 ## Benchmarks
 
-For streaming depth compression, I believe this is currently the best open-source option available online.
-
-It runs in ~4 milliseconds and produces compressed lossless depth video at 2.5 Mbps.
+It runs in ~4 milliseconds and produces compressed lossy depth video at 2.5 Mbps with reasonable quality.
 
 Detailed benchmarks and test vectors available at the end of the document.
 

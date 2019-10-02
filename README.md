@@ -107,7 +107,7 @@ then the lossless version may be a decent option.
 
     High-level:
 
-        (1) Special case for zero.
+        (0) Special case for zero.
             This ensures that the H.264 encoders do not flip zeroes.
         (1) Quantize depth to 11 bits based on sensor accuracy at range.
             Eliminate data that we do not need to encode.
@@ -130,8 +130,7 @@ then the lossless version may be a decent option.
             by subtracting it from 255.  So instead the roll-over becomes
             253, 254, 255, 254, 253, ... 1, 0, 1, 2, ...
         (2) Compress the resulting data as an image with a video encoder.
-            We use the best hardware acceleration available on the platform
-            and attempt to run the multiple encoders in parallel.
+            We use the best hardware acceleration available on the platform.
 
     Further details are in the DepthCompressor::Filter() code.
 
